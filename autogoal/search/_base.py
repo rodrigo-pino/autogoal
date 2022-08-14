@@ -1,4 +1,6 @@
 import logging
+import functools
+from typing import List, Tuple
 import enlighten
 import time
 import datetime
@@ -21,7 +23,7 @@ class SearchAlgorithm:
         generator_fn=None,
         fitness_fn=None,
         pop_size=20,
-        maximize=True,
+        maximize:bool | List | Tuple=True,
         errors="raise",
         early_stop=0.5,
         evaluation_timeout: int = 10 * Sec,
@@ -29,6 +31,8 @@ class SearchAlgorithm:
         search_timeout: int = 5 * Min,
         target_fn=None,
         allow_duplicates=True,
+        number_of_solutions=None,
+        ranking_fn=None,
     ):
         if generator_fn is None and fitness_fn is None:
             raise ValueError("You must provide either `generator_fn` or `fitness_fn`")
@@ -44,13 +48,33 @@ class SearchAlgorithm:
         self._search_timeout = search_timeout
         self._target_fn = target_fn
         self._allow_duplicates = allow_duplicates
+        self._top_solutions = ()
+        self._top_solutions_fns = ()
+        self._ranking_fn = ranking_fn or (
+            lambda _, fns: tuple(
+                map(
+                    functools.cmp_to_key(
+                        lambda x, y: 1
+                        if self._improves(x, y)
+                        else (-1 if self._improves(y, x) else 0)
+                    ),
+                    fns,
+                )
+            )
+        )
+        worst = lambda maximize: -math.inf if maximize else math.inf
+
+        if isinstance(self._maximize, (tuple, list)):
+            self._worst_fn = tuple(map(worst, self._maximize))
+        else:
+            self._worst_fn = worst(maximize)
 
         if self._evaluation_timeout > 0 or self._memory_limit > 0:
             self._fitness_fn = RestrictedWorkerByJoin(
                 self._fitness_fn, self._evaluation_timeout, self._memory_limit
             )
 
-    def run(self, generations=None, logger=None):
+    def run(self, generations=None, logger=None, ranking_fn=None):
         """Runs the search performing at most `generations` of `fitness_fn`.
 
         Returns:
@@ -61,6 +85,9 @@ class SearchAlgorithm:
 
         if generations is None:
             generations = math.inf
+
+        if ranking_fn is None:
+            ranking_fn = self._ranking_fn
 
         if isinstance(logger, list):
             logger = MultiLogger(*logger)
@@ -107,10 +134,12 @@ class SearchAlgorithm:
                         logger.sample_solution(solution)
                         fn = self._fitness_fn(solution)
                     except Exception as e:
-                        fn = -math.inf if self._maximize else math.inf
+                        fn = self._worst_fn
                         logger.error(e, solution)
 
                         if self._errors == "raise":
+                            if best_fn is None:
+                                best_fn = self._worst_fn
                             logger.end(best_solution, best_fn)
                             raise e from None
 
@@ -120,17 +149,13 @@ class SearchAlgorithm:
                     logger.eval_solution(solution, fn)
                     fns.append(fn)
 
-                    if (
-                        best_fn is None
-                        or (fn > best_fn and self._maximize)
-                        or (fn < best_fn and not self._maximize)
-                    ):
+                    if best_fn is None or self._improves(fn, best_fn):
                         logger.update_best(solution, fn, best_solution, best_fn)
                         best_solution = solution
                         best_fn = fn
                         improvement = True
 
-                        if self._target_fn and best_fn >= self._target_fn:
+                        if self._target_fn is not None and self._improves(best_fn, self._target_fn)
                             stop = True
                             break
 
@@ -176,6 +201,18 @@ class SearchAlgorithm:
 
         logger.end(best_solution, best_fn)
         return best_solution, best_fn
+
+    def _improves(self, a, b) -> bool:
+        maximize = self._maximize
+        if not isinstance(maximize, (tuple, list)):
+            a, b, maximize = (a,), (b,), (maximize,)
+
+        not_worst = all(
+            (ai >= bi if m else ai <= bi) for ai, bi, m in zip(a, b, maximize)
+        )
+        better = any((ai > bi if m else ai < bi) for ai, bi, m in zip(a, b, maximize))
+
+        return not_worst and better
 
     def _generate(self):
         # BUG: When multiprocessing is used for evaluation and no generation
