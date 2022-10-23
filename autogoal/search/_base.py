@@ -1,6 +1,6 @@
 import logging
 import functools
-from typing import List, Tuple
+from typing import List, Tuple, Union
 import enlighten
 import time
 import datetime
@@ -23,7 +23,7 @@ class SearchAlgorithm:
         generator_fn=None,
         fitness_fn=None,
         pop_size=20,
-        maximize:bool | List | Tuple=True,
+        maximize: Union[bool, List, Tuple] = True,
         errors="raise",
         early_stop=0.5,
         evaluation_timeout: int = 10 * Sec,
@@ -50,6 +50,7 @@ class SearchAlgorithm:
         self._allow_duplicates = allow_duplicates
         self._top_solutions = ()
         self._top_solutions_fns = ()
+        self._number_of_solutions = number_of_solutions
         self._ranking_fn = ranking_fn or (
             lambda _, fns: tuple(
                 map(
@@ -62,7 +63,8 @@ class SearchAlgorithm:
                 )
             )
         )
-        worst = lambda maximize: -math.inf if maximize else math.inf
+
+        worst = lambda to_maximize: -math.inf if to_maximize else math.inf
 
         if isinstance(self._maximize, (tuple, list)):
             self._worst_fn = tuple(map(worst, self._maximize))
@@ -155,7 +157,9 @@ class SearchAlgorithm:
                         best_fn = fn
                         improvement = True
 
-                        if self._target_fn is not None and self._improves(best_fn, self._target_fn)
+                        if self._target_fn is not None and self._improves(
+                            best_fn, self._target_fn
+                        ):
                             stop = True
                             break
 
@@ -174,6 +178,8 @@ class SearchAlgorithm:
                     no_improvement = 0
 
                 generations -= 1
+
+                self._rank_solutions(ranking_fn, solutions, fns)
 
                 if generations <= 0:
                     autogoal.logging.logger().info(
@@ -239,6 +245,35 @@ class SearchAlgorithm:
     def _finish_generation(self, fns):
         pass
 
+    def _rank_solutions(self, ranking_fn, solutions, fns):
+        if self._number_of_solutions is None:
+            return
+
+        solutions_to_rank = list(self._top_solutions)
+        solutions_fns = list(self._top_solutions_fns)
+
+        found_new = False
+        for solution, fn in zip(solutions, fns):
+            if solution is not None:
+                found_new = True
+                solutions_to_rank.append(solution)
+                solutions_fns.append(fn)
+
+        if not found_new:
+            return
+
+        ranking = ranking_fn(solutions_to_rank, solutions_fns)
+        _, ranked_solutions_fns, ranked_solution = zip(
+            *sorted(
+                zip(ranking, solutions_fns, solutions_to_rank),
+                key=lambda x: x[0],
+                reverse=True,
+            )
+        )
+
+        self._top_solutions = ranked_solution[: self._number_of_solutions]
+        self._top_solutions_fns = ranked_solutions_fns[: self._number_of_solutions]
+
 
 class Logger:
     def begin(self, generations, pop_size):
@@ -264,6 +299,14 @@ class Logger:
 
     def update_best(self, new_best, new_fn, previous_best, previous_fn):
         pass
+
+
+def format_fitness(fitness):
+    return (
+        repr(tuple(f"{float(fn or 0.0):0.3}" for fn in fitness))
+        if isinstance(fitness, (tuple, list))
+        else (f"{float(fitness):0.3}" if fitness is not None else "None")
+    )
 
 
 class ConsoleLogger(Logger):
@@ -306,7 +349,7 @@ class ConsoleLogger(Logger):
 
         print(
             self.emph("New generation started"),
-            self.success(f"best_fn={float(best_fn or 0.0):0.3}"),
+            self.success(f"best_fn={format_fitness(best_fn)}"),
             self.primary(f"generations={generations}"),
             self.primary(f"elapsed={elapsed}"),
             self.primary(f"remaining={remaining}"),
@@ -316,14 +359,19 @@ class ConsoleLogger(Logger):
         print(self.err("(!) Error evaluating pipeline: %s" % e))
 
     def end(self, best, best_fn):
-        print(self.emph("Search completed: best_fn=%.3f, best=\n%r" % (best_fn, best)))
+        print(
+            self.emph(
+                "Search completed: best_fn=%.3f, best=\n%r"
+                % (format_fitness(best_fn), best)
+            )
+        )
 
     def sample_solution(self, solution):
         print(self.emph("Evaluating pipeline:"))
         print(solution)
 
     def eval_solution(self, solution, fitness):
-        print(self.primary("Fitness=%.3f" % fitness))
+        print(self.primary("Fitness=%.3f" % format_fitness(fitness)))
 
     def update_best(self, new_best, new_fn, previous_best, previous_fn):
         print(
@@ -352,7 +400,7 @@ class ProgressLogger(Logger):
         self.pop_counter.count = 0
 
     def update_best(self, new_best, new_fn, *args):
-        self.total_counter.desc = "Best: %.3f" % new_fn
+        self.total_counter.desc = "Best: %.3f" % format_fitness(new_fn)
 
     def end(self, *args):
         self.pop_counter.close()
@@ -381,7 +429,7 @@ class RichLogger(Logger):
         self.console.print(repr(solution))
 
     def eval_solution(self, solution, fitness):
-        self.console.print(Panel(f"📈 Fitness=[blue]{fitness:.3f}"))
+        self.console.print(Panel(f"📈 Fitness=[blue]{format_fitness(fitness):.3f}"))
 
     def error(self, e: Exception, solution):
         self.console.print(f"⚠️[red bold]Error:[/] {e}")

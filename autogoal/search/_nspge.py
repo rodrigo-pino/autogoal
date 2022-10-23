@@ -1,9 +1,68 @@
 import math
-from typing import List
+from typing import List, Optional
+
+from autogoal.utils import Gb, Min, Sec
 from ._pge import PESearch
 
 
 class NSPESearch(PESearch):
+    def __init__(
+        self,
+        generator_fn=None,
+        fitness_fn=None,
+        pop_size=None,
+        maximize=True,
+        errors="raise",
+        early_stop=0.5,
+        evaluation_timeout: int = 10 * Sec,
+        memory_limit: int = 4 * Gb,
+        search_timeout: int = 5 * Min,
+        target_fn=None,
+        allow_duplicates=True,
+        number_of_solutions=None,
+        ranking_fn=None,
+        learning_factor=0.05,
+        selection: float = 0.2,
+        epsilon_greed: float = 0.1,
+        random_state: Optional[int] = None,
+        name: str = None,
+        save: bool = False,
+        **kwargs,
+    ):
+        def default_ranking_fn(_, fns):
+            rankings = [-math.inf] * len(fns)
+            fronts = self.non_dominated_sort(fns)
+            for ranking, front in enumerate(fronts):
+                for index in front:
+                    rankings[index] = -ranking
+            return rankings
+
+        if ranking_fn is None:
+            ranking_fn = default_ranking_fn
+
+        super().__init__(
+            generator_fn=generator_fn,
+            fitness_fn=fitness_fn,
+            pop_size=pop_size,
+            maximize=maximize,
+            errors=errors,
+            early_stop=early_stop,
+            evaluation_timeout=evaluation_timeout,
+            memory_limit=memory_limit,
+            search_timeout=search_timeout,
+            target_fn=target_fn,
+            allow_duplicates=allow_duplicates,
+            number_of_solutions=number_of_solutions,
+            ranking_fn=ranking_fn,
+            learning_factor=learning_factor,
+            selection=selection,
+            epsilon_greed=epsilon_greed,
+            random_state=random_state,
+            name=name,
+            save=save,
+            **kwargs,
+        )
+
     def _indices_of_fittest(self, fns: List):
         fronts = self.non_dominated_sort(fns)
         indices = []
@@ -52,7 +111,7 @@ class NSPESearch(PESearch):
 
     def crowding_distance(self, fns: List, front, i):
         if len(front) <= 0:
-            raise ValueError("Fron is empty or negative")
+            raise ValueError("Pareto front is empty or negative")
         if isinstance(self._maximize, bool):
             self._maximize = (self._maximize,)
 
@@ -62,7 +121,7 @@ class NSPESearch(PESearch):
             crowding_distances[front[0]] = math.inf
             crowding_distances[front[-1]] = math.inf
             m_values = [fns[i][m] for i in front]
-            scale = max(m_values) - min(m_values)
+            scale: float = max(m_values) - min(m_values)
             if scale == 0:
                 scale = 1
             for i in range(1, len(front) - 1):
