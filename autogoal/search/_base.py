@@ -109,11 +109,13 @@ class SearchAlgorithm:
 
         try:
             while generations > 0:
+                print(f"=========== Generation {generations} ===========")
                 stop = False
 
                 logger.start_generation(generations, best_fn)
                 self._start_generation()
 
+                solutions = []
                 fns = []
 
                 improvement = False

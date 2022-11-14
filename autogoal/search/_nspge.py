@@ -5,12 +5,19 @@ from autogoal.utils import Gb, Min, Sec
 from ._pge import PESearch
 
 
+# TODO: scale function results in crowding distance
+# TODO: Return multiple possible pipelines, instead of just the one
+# TODO: How is the genotype updated, since we are not using the best, but a list of the bests.
+#       Does it gets updated *N* times with the *N* fittest??
+# TODO: Where/When is the population cropped
+
+
 class NSPESearch(PESearch):
     def __init__(
         self,
         generator_fn=None,
         fitness_fn=None,
-        pop_size=None,
+        pop_size=20,
         maximize=True,
         errors="raise",
         early_stop=0.5,
@@ -40,6 +47,7 @@ class NSPESearch(PESearch):
         if ranking_fn is None:
             ranking_fn = default_ranking_fn
 
+        print("Intializing nspge")
         super().__init__(
             generator_fn=generator_fn,
             fitness_fn=fitness_fn,
@@ -64,6 +72,7 @@ class NSPESearch(PESearch):
         )
 
     def _indices_of_fittest(self, fns: List):
+        print("Indices of  fittest")
         fronts = self.non_dominated_sort(fns)
         indices = []
         k = int(self._selection * len(fns))
@@ -82,51 +91,92 @@ class NSPESearch(PESearch):
                 break
         return indices
 
-    def non_dominated_sort(self, fns: List):
-        fronts = [[]]
-        domination_count = [0 for _ in fns]
-        dominated_fns = [list() for _ in fns]
+    def non_dominated_sort(self, scores: List[List[float]]):
+        print("Nondominated sorting of", scores)
 
-        for i, fn_i in enumerate(fns):
-            for j, fn_j in enumerate(fns):
-                if self._improves(fn_i, fn_j):
-                    dominated_fns[i].append(j)
-                elif self._improves(fn_j, fn_i):
-                    domination_count[i] += 1
-            if domination_count[i] == 0:
+        fronts: List[List[int]] = [[]]
+        domination_rank = [0] * len(scores)
+        dominated_scores = [list() for _ in scores]
+
+        for i, score_i in enumerate(scores):
+            for j, score_j in enumerate(scores):
+                if self._improves(score_i, score_j):
+                    dominated_scores[i].append(j)
+                elif self._improves(score_j, score_i):
+                    domination_rank[i] += 1
+            if domination_rank[i] == 0:
                 fronts[0].append(i)
 
-        i = 0
-        while len(fronts[i]) > 0:
+        front_rank = 0
+        while len(fronts[front_rank]) > 0:
             next_front = []
-            for idx in fronts[i]:
-                for dominated_idx in dominated_fns[idx]:
-                    domination_count[dominated_idx] -= 1
-                    if domination_count[dominated_idx] == 0:
-                        next_front.append(dominated_idx)
-            i += 1
+            for i in fronts[front_rank]:
+                for dominated in dominated_scores[i]:
+                    domination_rank[dominated] -= 1
+                    if domination_rank[dominated] == 0:
+                        next_front.append(dominated)
+            front_rank += 1
             fronts.append(next_front)
 
+        print("Nondominated sort result", fronts[:-1])
         return fronts[:-1]
 
-    def crowding_distance(self, fns: List, front, i):
+    def crowding_distance(self, scores: List[List[float]], front, index):
+        print(f"scores[{index}]:", scores[index])
+        print("front", front)
+
         if len(front) <= 0:
             raise ValueError("Pareto front is empty or negative")
         if isinstance(self._maximize, bool):
             self._maximize = (self._maximize,)
 
-        crowding_distances: List[float] = [0 for _ in fns]
+        scaled_scores = feature_scaling(scores)
+
+        crowding_distances: List[float] = [0 for _ in scores]
         for m in range(len(self._maximize)):
-            front = list(sorted(front, key=lambda i: fns[i][m]))
+            front = list(sorted(front, key=lambda x: scores[x][m]))
             crowding_distances[front[0]] = math.inf
             crowding_distances[front[-1]] = math.inf
-            m_values = [fns[i][m] for i in front]
+            m_values = [scaled_scores[i][m] for i in front]
             scale: float = max(m_values) - min(m_values)
             if scale == 0:
                 scale = 1
             for i in range(1, len(front) - 1):
                 crowding_distances[i] += (
-                    fns[front[i + 1]][m] - fns[front[i - 1]][m]
+                    scaled_scores[front[i + 1]][m] - scaled_scores[front[i - 1]][m]
                 ) / scale
 
-        return crowding_distances[i]
+        # print("Crowding distances:", crowding_distances)
+        # print(f"Crowding distance result at {index}: {crowding_distances[index]}")
+        return crowding_distances[index]
+
+
+def feature_scaling(solutions_scores: List[List[float]]) -> List[List[float]]:
+    max_score_funcs = len(solutions_scores[0])
+    scaled_scores = [list() for _ in solutions_scores]
+
+    score_func_index = 0
+    while score_func_index < max_score_funcs:
+        score_func_values = [
+            solution_scores[score_func_index] for solution_scores in solutions_scores
+        ]
+        max_value = max([v for v in score_func_values if v != math.inf])
+        min_value = min([v for v in score_func_values if v != -math.inf])
+        diff = max_value - min_value
+        # print("max_value", max_value)
+        # print("min_value", min_value)
+        # print("diff", diff)
+
+        for i, scaled in enumerate(scaled_scores):
+            scaled_value = (
+                (score_func_values[i] - min_value) / diff
+                if score_func_values[i] != -math.inf
+                else -math.inf
+            )
+            scaled.append(scaled_value)
+        score_func_index += 1
+
+    # for (a, b) in zip(solutions_scores, scaled_scores):
+    # print(f"{a} vs {b}")
+
+    return scaled_scores
