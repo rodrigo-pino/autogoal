@@ -28,5 +28,5 @@ plot_and_save(
     automl.solutions_fns_trace,
     xlabel="accuracy",
     ylabel="not accuracy",
-    path="./graphics/cars_acc_vs_not_acc",
+    path="./graphics/cars_acc_vs_not_acc.jpg",
 )

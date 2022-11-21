@@ -30,5 +30,5 @@ plot_and_save(
     automl.solutions_fns_trace,
     xlabel="precision",
     ylabel="recall",
-    path="./graphics/haha_precision_vs_recall.png",
+    path="./graphics/haha_precision_vs_recall.jpg",
 )
