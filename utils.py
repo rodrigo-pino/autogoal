@@ -47,13 +47,13 @@ def print_and_save(automl: AutoML, folder_name="generic"):
     path = Path(f"./pipelines/{folder_name}")
     create_empty_folder(path)
 
-    count = 1
+    count = 0
     for pipeline, score in zip(automl.best_pipeline_, automl.best_score_):
+        count += 1
         # Printing
         print("\nSolution:", count)
         print(score)
         print(pipeline)
-        count += 1
 
         # Saving
         arg_path = path / f"solution_{count}"
