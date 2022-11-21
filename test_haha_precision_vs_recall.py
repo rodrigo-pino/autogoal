@@ -1,7 +1,7 @@
 from autogoal.datasets import haha
 from autogoal.kb import Seq, Sentence, Supervised, VectorCategorical
 from autogoal.ml import AutoML
-from autogoal.utils import Gb, Min
+from autogoal.utils import Gb, Hour, Min
 from autogoal.search import NSPESearch
 from metrics import precision_vs_recall
 from utils import plot_and_save, print_and_save
@@ -16,7 +16,7 @@ automl = AutoML(
     random_state=2,
     number_of_solutions=100,
     memory_limit=16 * Gb,
-    search_timeout=30 * Min,
+    search_timeout=8 * Hour,
 )
 
 
@@ -30,5 +30,5 @@ plot_and_save(
     automl.solutions_fns_trace,
     xlabel="precision",
     ylabel="recall",
-    path="./graphics/haha_precision_vs_recall.jpg",
+    folder_name="haha_precision_vs_recall",
 )

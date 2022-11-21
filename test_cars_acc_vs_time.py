@@ -28,5 +28,5 @@ plot_and_save(
     automl.solutions_fns_trace,
     xlabel="accuracy",
     ylabel="training time",
-    path="./graphics/cars_acc_vs_time.jpg",
+    folder_name="cars_acc_vs_time",
 )

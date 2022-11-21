@@ -4,6 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import os
 import shutil
+import pickle
 
 
 # plot all points in trace
@@ -14,8 +15,18 @@ def plot_and_save(
     trace,
     xlabel="metric 0",
     ylabel="metric 1",
-    path="./graphics/generic.jpg",
+    folder_name="generic",
 ):
+    path = Path(f"./graphics/{folder_name}")
+    create_empty_folder(path)
+    plot_path = path / f"{folder_name}.jpg"
+    score_path = path / "scores.pickle"
+
+    # Saving scores
+    with open(score_path, "wb") as file:
+        pickle.dump((best_scores, trace), file)
+
+    # Plotting
     print("------------- Plotting -------------------")
     total_solutions = len(trace)
     stages = int(total_solutions / 10)
@@ -36,7 +47,7 @@ def plot_and_save(
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend(loc="best")
-    plt.savefig(path, dpi=1200)
+    plt.savefig(plot_path, dpi=1200)
     plt.show()
 
 

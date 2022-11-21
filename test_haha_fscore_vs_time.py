@@ -29,5 +29,5 @@ plot_and_save(
     automl.solutions_fns_trace,
     xlabel="f1 score",
     ylabel="train time",
-    path="./graphics/haha_fscore_vs_time.jpg",
+    folder_name="haha_fscore_vs_time",
 )

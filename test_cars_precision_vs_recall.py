@@ -28,5 +28,5 @@ plot_and_save(
     automl.solutions_fns_trace,
     xlabel="precision",
     ylabel="recall",
-    path="./graphics/cars_precision_vs_recall.jpg",
+    folder_name="cars_precision_vs_recall",
 )

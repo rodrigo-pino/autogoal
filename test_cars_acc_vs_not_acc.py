@@ -22,11 +22,11 @@ automl = AutoML(
 x, y = cars.load()
 automl.fit(x, y)
 
-print_and_save(automl, "./cars_acc_vs_not_acc")
+print_and_save(automl, "cars_acc_vs_not_acc")
 plot_and_save(
     automl.best_score_,
     automl.solutions_fns_trace,
     xlabel="accuracy",
     ylabel="not accuracy",
-    path="./graphics/cars_acc_vs_not_acc.jpg",
+    folder_name="cars_acc_vs_not_acc",
 )
