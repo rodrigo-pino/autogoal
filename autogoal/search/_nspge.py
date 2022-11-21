@@ -39,6 +39,7 @@ class NSPESearch(PESearch):
         def default_ranking_fn(_, fns):
             rankings = [-math.inf] * len(fns)
             fronts = self.non_dominated_sort(fns)
+            # return fronts[0]
             for ranking, front in enumerate(fronts):
                 for index in front:
                     rankings[index] = -ranking
@@ -47,7 +48,6 @@ class NSPESearch(PESearch):
         if ranking_fn is None:
             ranking_fn = default_ranking_fn
 
-        print("Intializing nspge")
         super().__init__(
             generator_fn=generator_fn,
             fitness_fn=fitness_fn,
@@ -71,7 +71,7 @@ class NSPESearch(PESearch):
             **kwargs,
         )
 
-    def _indices_of_fittest(self, fns: List):
+    def _indices_of_fittest(self, fns: List[List[float]]):
         print("Indices of  fittest")
         fronts = self.non_dominated_sort(fns)
         indices = []
@@ -82,18 +82,14 @@ class NSPESearch(PESearch):
                 indices.extend(front)
             else:
                 indices.extend(
-                    sorted(
-                        front,
-                        key=lambda i: (fns[i], self.crowding_distance(fns, front, i)),
-                        reverse=True,
-                    )[: k - len(indices)]
+                    sorted(front, key=lambda i: -self.crowding_distance(fns, front, i))[
+                        : k - len(indices)
+                    ]
                 )
                 break
         return indices
 
     def non_dominated_sort(self, scores: List[List[float]]):
-        print("Nondominated sorting of", scores)
-
         fronts: List[List[int]] = [[]]
         domination_rank = [0] * len(scores)
         dominated_scores = [list() for _ in scores]
@@ -118,13 +114,11 @@ class NSPESearch(PESearch):
             front_rank += 1
             fronts.append(next_front)
 
-        print("Nondominated sort result", fronts[:-1])
         return fronts[:-1]
 
-    def crowding_distance(self, scores: List[List[float]], front, index):
-        print(f"scores[{index}]:", scores[index])
-        print("front", front)
-
+    def crowding_distance(
+        self, scores: List[List[float]], front: List[int], index: int
+    ) -> float:
         if len(front) <= 0:
             raise ValueError("Pareto front is empty or negative")
         if isinstance(self._maximize, bool):
@@ -134,7 +128,7 @@ class NSPESearch(PESearch):
 
         crowding_distances: List[float] = [0 for _ in scores]
         for m in range(len(self._maximize)):
-            front = list(sorted(front, key=lambda x: scores[x][m]))
+            front = sorted(front, key=lambda x: scores[x][m])
             crowding_distances[front[0]] = math.inf
             crowding_distances[front[-1]] = math.inf
             m_values = [scaled_scores[i][m] for i in front]
@@ -146,37 +140,55 @@ class NSPESearch(PESearch):
                     scaled_scores[front[i + 1]][m] - scaled_scores[front[i - 1]][m]
                 ) / scale
 
-        # print("Crowding distances:", crowding_distances)
-        # print(f"Crowding distance result at {index}: {crowding_distances[index]}")
         return crowding_distances[index]
 
 
 def feature_scaling(solutions_scores: List[List[float]]) -> List[List[float]]:
-    max_score_funcs = len(solutions_scores[0])
+    total_metrics = len(solutions_scores[0])
     scaled_scores = [list() for _ in solutions_scores]
 
-    score_func_index = 0
-    while score_func_index < max_score_funcs:
-        score_func_values = [
-            solution_scores[score_func_index] for solution_scores in solutions_scores
-        ]
-        max_value = max([v for v in score_func_values if v != math.inf])
-        min_value = min([v for v in score_func_values if v != -math.inf])
+    metric_selector = 0
+    while metric_selector < total_metrics:
+        # All scores per solution
+        # sol1: [1, 2]
+        # sol2: [3, 4]
+        # m_score[0] -> [1, 3]
+        # m_score[1] -> [3, 4]
+        m_scores = [score[metric_selector] for score in solutions_scores]
+        if len(m_scores) == 1:
+            for scaled in scaled_scores:
+                scaled.append(1)
+            metric_selector += 1
+            continue
+
+        # print("----- metric:", metric_selector, [x for x in m_scores if x != -math.inf])
+        filtered_m_scores = [v for v in m_scores if v != -math.inf]
+        if len(filtered_m_scores) == 0:
+            for scaled in scaled_scores:
+                scaled.append(-math.inf)
+            metric_selector += 1
+            continue
+
+        max_value = max(filtered_m_scores)
+        min_value = min(filtered_m_scores)
         diff = max_value - min_value
-        # print("max_value", max_value)
-        # print("min_value", min_value)
-        # print("diff", diff)
+
+        # When there is just one valid solution (everyone else is minus infinity)
+        if diff == 0:
+            index = m_scores.index(max_value)
+            for i, scaled in enumerate(scaled_scores):
+                if i == index or m_scores[i] != -math.inf:
+                    scaled.append(1)
+                else:
+                    scaled.append(-math.inf)
+            metric_selector += 1
+            continue
 
         for i, scaled in enumerate(scaled_scores):
             scaled_value = (
-                (score_func_values[i] - min_value) / diff
-                if score_func_values[i] != -math.inf
-                else -math.inf
-            )
+                m_scores[i] - min_value
+            ) / diff  # if m_scores[i] != -math.inf else 0
             scaled.append(scaled_value)
-        score_func_index += 1
-
-    # for (a, b) in zip(solutions_scores, scaled_scores):
-    # print(f"{a} vs {b}")
+        metric_selector += 1
 
     return scaled_scores

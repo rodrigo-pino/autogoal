@@ -1,6 +1,6 @@
 import logging
 import functools
-from typing import List, Tuple, Union
+from typing import Any, List, Tuple, Union
 import enlighten
 import time
 import datetime
@@ -31,7 +31,7 @@ class SearchAlgorithm:
         search_timeout: int = 5 * Min,
         target_fn=None,
         allow_duplicates=True,
-        number_of_solutions=None,
+        number_of_solutions=5,
         ranking_fn=None,
     ):
         if generator_fn is None and fitness_fn is None:
@@ -48,8 +48,10 @@ class SearchAlgorithm:
         self._search_timeout = search_timeout
         self._target_fn = target_fn
         self._allow_duplicates = allow_duplicates
+
         self._top_solutions = ()
         self._top_solutions_fns = ()
+
         self._number_of_solutions = number_of_solutions
         self._ranking_fn = ranking_fn or (
             lambda _, fns: tuple(
@@ -107,6 +109,7 @@ class SearchAlgorithm:
 
         logger.begin(generations, self._pop_size)
 
+        solutions_fns_trace = []
         try:
             while generations > 0:
                 print(f"=========== Generation {generations} ===========")
@@ -145,12 +148,14 @@ class SearchAlgorithm:
                             if best_fn is None:
                                 best_fn = self._worst_fn
                             logger.end(best_solution, best_fn)
+                            self._rank_solutions(ranking_fn, solutions, fns)
                             raise e from None
 
                     if not self._allow_duplicates:
                         seen.add(repr(solution))
 
                     logger.eval_solution(solution, fn)
+                    solutions.append(solution)
                     fns.append(fn)
 
                     if best_fn is None or self._improves(fn, best_fn):
@@ -162,12 +167,14 @@ class SearchAlgorithm:
                         if self._target_fn is not None and self._improves(
                             best_fn, self._target_fn
                         ):
+                            print("Stoping due to improvement over target fn")
                             stop = True
                             break
 
                     spent_time = time.time() - start_time
 
                     if self._search_timeout and spent_time > self._search_timeout:
+                        print("Stopping due to search timeout", self._search_timeout)
                         autogoal.logging.logger().info(
                             "(!) Stopping since time spent is %.2f." % (spent_time)
                         )
@@ -181,9 +188,12 @@ class SearchAlgorithm:
 
                 generations -= 1
 
+                fronts = self.non_dominated_sort(fns)
+                solutions_fns_trace.append([fns[i] for i in fronts[0]])
                 self._rank_solutions(ranking_fn, solutions, fns)
 
                 if generations <= 0:
+                    print("Stopping since all generation completed")
                     autogoal.logging.logger().info(
                         "(!) Stopping since all generations are done."
                     )
@@ -191,6 +201,11 @@ class SearchAlgorithm:
                     break
 
                 if early_stop and no_improvement >= early_stop:
+                    print(
+                        "Stopince since no improvements since",
+                        no_improvement,
+                        "generation",
+                    )
                     autogoal.logging.logger().info(
                         "(!) Stopping since no improvement for %i generations."
                         % no_improvement
@@ -207,8 +222,47 @@ class SearchAlgorithm:
         except KeyboardInterrupt:
             pass
 
+        # for (b_sol, b_fn) in zip(self._top_solutions, self._top_solutions_fns):
+        #   print(b_fn, b_sol)
+
         logger.end(best_solution, best_fn)
-        return best_solution, best_fn
+
+        fronts = self.non_dominated_sort(self._top_solutions_fns)
+        pareto = fronts[0]
+
+        pareto_solutions = [self._top_solutions[i] for i in pareto]
+        pareto_fns = [self._top_solutions_fns[i] for i in pareto]
+        return pareto_solutions, pareto_fns, solutions_fns_trace
+
+    def non_dominated_sort(self, scores: Any):
+        # print("Nondominated sorting of", scores)
+
+        fronts: List[List[int]] = [[]]
+        domination_rank = [0] * len(scores)
+        dominated_scores = [list() for _ in scores]
+
+        for i, score_i in enumerate(scores):
+            for j, score_j in enumerate(scores):
+                if self._improves(score_i, score_j):
+                    dominated_scores[i].append(j)
+                elif self._improves(score_j, score_i):
+                    domination_rank[i] += 1
+            if domination_rank[i] == 0:
+                fronts[0].append(i)
+
+        front_rank = 0
+        while len(fronts[front_rank]) > 0:
+            next_front = []
+            for i in fronts[front_rank]:
+                for dominated in dominated_scores[i]:
+                    domination_rank[dominated] -= 1
+                    if domination_rank[dominated] == 0:
+                        next_front.append(dominated)
+            front_rank += 1
+            fronts.append(next_front)
+
+        # print("Nondominated sort result", fronts[:-1])
+        return fronts[:-1]
 
     def _improves(self, a, b) -> bool:
         maximize = self._maximize
@@ -247,7 +301,11 @@ class SearchAlgorithm:
     def _finish_generation(self, fns):
         pass
 
+    def _indices_of_fittest(self, fns):
+        raise NotImplementedError()
+
     def _rank_solutions(self, ranking_fn, solutions, fns):
+        # print(f"Getting top: {self._number_of_solutions} from {solutions}, {fns}")
         if self._number_of_solutions is None:
             return
 
@@ -275,6 +333,8 @@ class SearchAlgorithm:
 
         self._top_solutions = ranked_solution[: self._number_of_solutions]
         self._top_solutions_fns = ranked_solutions_fns[: self._number_of_solutions]
+
+        print("Ranking done:", self._top_solutions_fns)
 
 
 class Logger:
