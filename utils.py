@@ -25,7 +25,9 @@ def plot_and_save(
     for i in range(0, total_solutions):
         solutions_scores = trace[i]
         xs, ys = restructure(solutions_scores)
-        ax.plot(xs, ys, "o", color=str(1 - i / total_solutions))
+        (sols,) = ax.plot(xs, ys, "o", color=str(1 - i / total_solutions))
+        if i == int(total_solutions / 2):
+            sols.set_label("Solutions")
 
     # Mark solutions that belongs to the Pareto front
     # plt.colorbar([0, 0.5, 1])
