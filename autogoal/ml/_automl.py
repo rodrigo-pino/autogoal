@@ -72,7 +72,9 @@ class AutoML:
         )
 
         return build_pipeline_graph(
-            input_types=self.input, output_type=self.output, registry=registry,
+            input_types=self.input,
+            output_type=self.output,
+            registry=registry,
         )
 
     def fit(self, X, y=None, **kwargs):
@@ -89,7 +91,7 @@ class AutoML:
             **self.search_kwargs,
         )
 
-        self.best_pipeline_, self.best_score_ = search.run(
+        self.best_pipeline_, self.best_score_, self.solutions_fns_trace = search.run(
             self.search_iterations, **kwargs
         )
 
@@ -98,9 +100,10 @@ class AutoML:
     def fit_pipeline(self, X, y):
         self._check_fitted()
 
-        self.best_pipeline_.send("train")
-        self.best_pipeline_.run(X, y)
-        self.best_pipeline_.send("eval")
+        for pipeline in self.best_pipeline_:
+            pipeline.send("train")
+            pipeline.run(X, y)
+            pipeline.send("eval")
 
     def save(self, fp: io.BytesIO):
         """
@@ -137,8 +140,8 @@ class AutoML:
     @classmethod
     def load(self, fp: io.FileIO) -> "AutoML":
         """
-        Deserializes an AutoML instance. 
-        
+        Deserializes an AutoML instance.
+
         After deserialization, the best pipeline found is ready to predict.
         """
         automl = pickle.Unpickler(fp).load()
@@ -152,7 +155,7 @@ class AutoML:
     def folder_load(self, path: Path) -> "AutoML":
         """
         Deserializes an AutoML instance from a given path.
-        
+
         After deserialization, the best pipeline found is ready to predict.
         """
         load_path = path / "storage"
