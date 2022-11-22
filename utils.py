@@ -58,6 +58,15 @@ def print_and_save(automl: AutoML, folder_name="generic"):
     path = Path(f"./pipelines/{folder_name}")
     create_empty_folder(path)
 
+    trace_path = path / "trace.txt"
+    with open(trace_path, "a") as file:
+        for trace_num, (solutions, fns) in enumerate(
+            zip(automl.solutions_trace, automl.solutions_fns_trace)
+        ):
+            print(f"------------- Trace {trace_num} --------------", file=file)
+            for sol_num, (solution, fn) in enumerate(zip(solutions, fns)):
+                print(f"Solution {sol_num}: {fn}\n{solution}\n", file=file)
+
     count = 0
     for pipeline, score in zip(automl.best_pipeline_, automl.best_score_):
         count += 1
