@@ -103,12 +103,16 @@ class SearchAlgorithm:
 
         best_solution = None
         best_fn = None
+
+        best_fns = None
+
         no_improvement = 0
         start_time = time.time()
         seen = set()
 
         logger.begin(generations, self._pop_size)
 
+        solutions_trace = []
         solutions_fns_trace = []
         try:
             while generations > 0:
@@ -158,10 +162,12 @@ class SearchAlgorithm:
                     solutions.append(solution)
                     fns.append(fn)
 
-                    if best_fn is None or self._improves(fn, best_fn):
-                        logger.update_best(solution, fn, best_solution, best_fn)
-                        best_solution = solution
-                        best_fn = fn
+                    if best_fns is None or self._top_solutions_fns != best_fns:
+                        # logger.update_best(solution, fn, best_solution, best_fn)
+                        # best_solution = solution
+                        # best_fn = fn
+                        best_fns = [s for s in self._top_solutions_fns]
+
                         improvement = True
 
                         if self._target_fn is not None and self._improves(
@@ -189,6 +195,7 @@ class SearchAlgorithm:
                 generations -= 1
 
                 fronts = self.non_dominated_sort(fns)
+                solutions_trace.append([solutions[i] for i in fronts[0]])
                 solutions_fns_trace.append([fns[i] for i in fronts[0]])
                 self._rank_solutions(ranking_fn, solutions, fns)
 
@@ -232,7 +239,7 @@ class SearchAlgorithm:
 
         pareto_solutions = [self._top_solutions[i] for i in pareto]
         pareto_fns = [self._top_solutions_fns[i] for i in pareto]
-        return pareto_solutions, pareto_fns, solutions_fns_trace
+        return pareto_solutions, pareto_fns, solutions_trace, solutions_fns_trace
 
     def non_dominated_sort(self, scores: Any):
         # print("Nondominated sorting of", scores)
@@ -335,6 +342,15 @@ class SearchAlgorithm:
         self._top_solutions_fns = ranked_solutions_fns[: self._number_of_solutions]
 
         print("Ranking done:", self._top_solutions_fns)
+
+
+def tuplify(l):
+    new_l = []
+    for e in l:
+        if isinstance(e, list):
+            e = tuplify(e)
+        new_l.append(e)
+    return tuple(new_l)
 
 
 class Logger:

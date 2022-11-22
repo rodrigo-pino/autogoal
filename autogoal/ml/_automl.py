@@ -91,9 +91,12 @@ class AutoML:
             **self.search_kwargs,
         )
 
-        self.best_pipeline_, self.best_score_, self.solutions_fns_trace = search.run(
-            self.search_iterations, **kwargs
-        )
+        (
+            self.best_pipeline_,
+            self.best_score_,
+            self.solutions_trace,
+            self.solutions_fns_trace,
+        ) = search.run(self.search_iterations, **kwargs)
 
         self.fit_pipeline(X, y)
 
