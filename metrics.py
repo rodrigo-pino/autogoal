@@ -1,5 +1,6 @@
 from typing import Tuple
 from time import time
+from autogoal.datasets import meddocan
 import math
 import sklearn.metrics as sk_metrics
 import autogoal.ml.metrics as metrics
@@ -31,11 +32,7 @@ def f_score_vs_train_time(average: str):
 
     def f_score_vs_train_time_inner(*args, **kwargs):
         t1 = time()
-        try:
-            f = fitness_f_score(*args, **kwargs)
-        except Exception as e:
-            # print(e)
-            raise e
+        f = fitness_f_score(*args, **kwargs)
         t2 = time()
         score = [f, t1 - t2]
         return score
@@ -52,3 +49,31 @@ def precision_vs_recall(average: str):
         return precision, recall
 
     return precision_vs_recall_inner
+
+
+# Metric 5 (Meddocan only)
+def meddocan_fscore_vs_train_time(*args, **kwargs):
+    @metrics.supervised_fitness_fn
+    def fitness_f_score(ytrue, ypred) -> float:
+        try:
+            r = meddocan.F1_beta(ytrue, ypred)
+            return r
+        except Exception as e:
+            raise e
+
+    t1 = time()
+    try:
+        f = fitness_f_score(*args, **kwargs)
+    except Exception as e:
+        raise e
+    t2 = time()
+    score = [f, t1 - t2]
+    return score
+
+
+# Metric 6 (Meddocan only)
+@metrics.supervised_fitness_fn
+def meddocan_precision_vs_recall(ytrue, ypred):
+    precision = meddocan.precision(ytrue, ypred)
+    recall = meddocan.recall(ytrue, ypred)
+    return precision, recall
