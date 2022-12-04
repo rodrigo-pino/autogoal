@@ -27,7 +27,7 @@ print_and_save(automl, "meddocan_precision_vs_recall")
 plot_and_save(
     automl.best_score_,
     automl.solutions_fns_trace,
-    xlabel="fscore",
-    ylabel="train time",
+    xlabel="precision",
+    ylabel="recall",
     folder_name="meddocan_precision_vs_recall",
 )

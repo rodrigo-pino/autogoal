@@ -16,7 +16,7 @@ automl = AutoML(
     random_state=2,
     number_of_solutions=100,
     memory_limit=16 * Gb,
-    search_timeout=1 * Hour,
+    search_timeout=1 * Min,
 )
 
 x, y = cars.load()

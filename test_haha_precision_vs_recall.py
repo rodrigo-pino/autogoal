@@ -16,7 +16,8 @@ automl = AutoML(
     random_state=2,
     number_of_solutions=100,
     memory_limit=16 * Gb,
-    search_timeout=8 * Hour,
+    search_timeout=10 * Hour,
+    evaluation_timeout=3 * Min,
 )
 
 

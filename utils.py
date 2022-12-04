@@ -78,7 +78,11 @@ def print_and_save(automl: AutoML, folder_name="generic"):
         # Saving
         arg_path = path / f"solution_{count}"
         create_empty_folder(arg_path)
-        pipeline.save_algorithms(arg_path)
+        try:
+            pipeline.save_algorithms(arg_path)
+        except:
+            print("Could not save this algoritm")
+            pass
 
 
 def create_empty_folder(path: Path):
